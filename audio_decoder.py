@@ -12,7 +12,7 @@ class AudioDecoder:
         self.freq = freq
         
         wf = wave.open(self.file, "rb")
-        self.frames = np.from_buffer(wf.readFrames(-1), dtype=np.int16)
+        self.frames = np.from_buffer(wf.readframes(-1), dtype=np.int16)
         self.frame_rate = wf.getframerate()
         wf.close()
 
