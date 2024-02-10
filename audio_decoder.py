@@ -12,7 +12,7 @@ class AudioDecoder:
         self.freq = freq
         
         wf = wave.open(self.file, "rb")
-        self.frames = np.from_buffer(wf.readframes(-1), dtype=np.int16)
+        self.frames = np.frombuffer(wf.readframes(-1), dtype=np.int32)
         self.frame_rate = wf.getframerate()
         wf.close()
 
@@ -43,16 +43,14 @@ class AudioDecoder:
 
         return data
     
-    def locate_data(data, size):
+    def locate_data(self, data, size):
         """Finds data chunks of given size"""
 
         # Finds indices of all 1 bits
         indices = np.argwhere(data)[:, 0]
-        print(indices)
 
         # Gets differences between indices
         separation = np.diff(indices)
-        print(separation)
 
         # Gets indices that have a separation of more than data buffer
         indices = np.delete(indices, np.argwhere(separation <= size) + 1)
@@ -64,12 +62,12 @@ class AudioDecoder:
         # Removes indices that do not have an end bit at the end of the buffer
         return np.delete(indices, np.argwhere(np.logical_not(data[indices + size-1])))
     
-    def parse_data(data, index, size):
+    def parse_data(self, data, index, size):
         """Gets array of data chunks from locations"""
         index = np.array(index)
 
         # Expands indices array to include full data size
-        indices = indices.reshape(indices.size, 1) + np.arange(size).reshape(1, size)
+        indices = index.reshape(index.size, 1) + np.arange(size).reshape(1, size)
         
         # Trims off start and end bits
         return data[indices][:, 1:-1]
@@ -184,3 +182,11 @@ class StandardFormat(DataFormat):
         return datetime.datetime(self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second())
     def timestamp(self):
         return time.mktime(self.datetime().timetuple())
+    
+file = "./recordings/test500_1.wav"
+freq = 500
+decoder = AudioDecoder(file, freq)
+decoder.decode(0, 3.25, 122)
+
+print(decoder.data)
+print(decoder.wave_peaks)

@@ -1,7 +1,7 @@
 import pyaudio
 import wave
 
-file = "./Recordings/test1.wav"
+file = "./recordings/test500_1.wav"
 CHUNK = 1024
 
 wf = wave.open(file, 'rb')
