@@ -11,19 +11,27 @@ class AudioDecoder:
         self.file = file
         self.freq = freq
         
+        # Opens audio file and gets data
         wf = wave.open(self.file, "rb")
-        self.frames = np.frombuffer(wf.readframes(-1), dtype=np.int32)
+        self.frames = np.frombuffer(wf.readframes(-1), dtype=np.int16)
         self.frame_rate = wf.getframerate()
         wf.close()
 
     def decode(self, waveThres, bitThres, size):
         # Sets parameters
+
+        # Threshold for detecting wave peaks
         self.waveThres = waveThres
+        # Theshold for detecting high logic bits
         self.bitThres = bitThres
+
+        # Size of data blocks to decode
         self.size = size
 
-        # Gets wave peaks and binary signal
+        # Gets locations of wave peaks
         self.wave_peaks = self.get_wave_peaks(waveThres)
+
+        # Looks for binary signal within ranges to get data
         raw = self.convert_binary(self.wave_peaks, bitThres)
 
         # Gets locations of data blocks and parses into array
@@ -31,8 +39,27 @@ class AudioDecoder:
         self.data = self.parse_data(raw, self.second_stamps, size)
     
     def get_wave_peaks(self, waveThres):
-        """Gets frame indices at or above threshold"""
-        return np.argwhere(self.frames >= waveThres)[:, 0]
+      """Gets indices of maximum values in ranges where signal is above threshold"""
+
+      # Gets all indices where signal is above and below theshold
+      above = np.argwhere(self.frames >= waveThres)[:, 0]
+      below = np.argwhere(self.frames < waveThres)[:, 0]
+
+      # Gets locations where there are changes from below to above and vice versa
+      to_above = above[np.argwhere(np.diff(np.concatenate(([-1], above))) > 1)[:, 0]]
+      to_below = below[np.argwhere(np.diff(below) > 1)[:, 0] + 1]
+
+      # Removes last wave peak if it does not have a distinct end
+      if above[-1] == self.frames.size-1:
+            to_above = to_above[:-1]
+
+      # Creates a mask that filters indices by ranges
+      all_indices = np.arange(self.frames.size)
+
+      mask = np.all([all_indices >= to_above.reshape(-1, 1), all_indices < to_below.reshape(-1, 1)], axis=0)
+
+      # Returns locations of maximum values within ranges
+      return np.argmax(np.where(mask, self.frames, np.array(0)), axis=-1)
     
     def convert_binary(self, index, bitThres):
         """Converts frame amplitudes to binary signal"""
@@ -70,7 +97,7 @@ class AudioDecoder:
         indices = index.reshape(index.size, 1) + np.arange(size).reshape(1, size)
         
         # Trims off start and end bits
-        return data[indices][:, 1:-1]
+        return data[indices][:, 1:-1].astype(np.int16)
     
     def get_micros(self, index):
         """Gets microsecond timestamp from frame index"""
@@ -183,10 +210,14 @@ class StandardFormat(DataFormat):
     def timestamp(self):
         return time.mktime(self.datetime().timetuple())
     
-file = "./recordings/test500_1.wav"
+file = "./recordings/test500_5.wav"
 freq = 500
 decoder = AudioDecoder(file, freq)
-decoder.decode(0, 3.25, 122)
+decoder.decode(2000, 5000, 122)
 
 print(decoder.data)
-print(decoder.wave_peaks)
+
+dataObject = decoder.get_data_object(StandardFormat(), 0)
+#print(dataObject.lat())
+#print(dataObject.long())
+print(dataObject.minute())

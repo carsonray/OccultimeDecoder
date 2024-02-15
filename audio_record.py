@@ -1,7 +1,7 @@
 import pyaudio
 import wave
 
-outputFile = "./recordings/test1.wav"
+outputFile = "./recordings/test500_6.wav"
 CHUNK = 1024
 FORMAT = pyaudio.paInt16
 CHANNELS = 1

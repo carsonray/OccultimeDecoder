@@ -2,7 +2,7 @@ import wave
 import matplotlib.pyplot as plt
 import numpy as np
 
-wf= wave.open("./recordings/test500_3.wav", "rb")
+wf= wave.open("./recordings/test500_5.wav", "rb")
 
 frame_rate = wf.getframerate()
 n_frames = wf.getnframes()
@@ -13,7 +13,7 @@ wf.close()
 t_audio = n_frames/frame_rate
 print("Time:", t_audio)
 
-frame_array = np.frombuffer(frames, dtype=np.int32)
+frame_array = np.frombuffer(frames, dtype=np.int16)
 
 times = np.linspace(0, t_audio, num=n_frames)
 
