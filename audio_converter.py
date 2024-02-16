@@ -1,8 +1,8 @@
 import pydub
 from pydub import AudioSegment
 
-filename = "./recordings/test500_4.m4a"
-wav_filename = './recordings/test500_4.wav'
+old_file = "./recordings/test500_7.mp3"
+new_file = './recordings/test500_7_loss.wav'
 
-sound = AudioSegment.from_file(filename, format="m4a")
-file_handle = sound.export(wav_filename, format='wav')
+sound = AudioSegment.from_file(old_file, format="mp3")
+file_handle = sound.export(new_file, format='wav')

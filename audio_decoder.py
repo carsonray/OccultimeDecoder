@@ -37,7 +37,7 @@ class AudioDecoder:
         # Gets locations of data blocks and parses into array
         self.second_stamps = self.locate_data(raw, size)
         self.data = self.parse_data(raw, self.second_stamps, size)
-    
+
     def get_wave_peaks(self, waveThres):
       """Gets indices of maximum values in ranges where signal is above threshold"""
 
@@ -79,8 +79,8 @@ class AudioDecoder:
         # Gets differences between indices
         separation = np.diff(indices)
 
-        # Gets indices that have a separation of more than data buffer
-        indices = np.delete(indices, np.argwhere(separation <= size) + 1)
+        # Gets only indices that have a separation of more than data buffer
+        indices = np.delete(indices, np.argwhere(separation < size-1) + 1)
 
         # Removes last index if there is not enough room for a full data buffer
         if indices[-1] > indices.size - size:
@@ -194,30 +194,37 @@ class StandardFormat(DataFormat):
     def long(self):
         return self.bin_to_float(self.bitstring(32, 64))
     def year(self):
-        return int(self.bitstring(104, 120), 2) + 2000
+        return int(self.bitstring(92, 108), 2)
     def month(self):
-        return int(self.bitstring(96, 104), 2)
+        return int(self.bitstring(88, 92), 2)
     def day(self):
-        return int(self.bitstring(88, 96), 2)
+        return int(self.bitstring(82, 88), 2)
     def hour(self):
-        return int(self.bitstring(80, 88), 2)
+        return int(self.bitstring(76, 82), 2)
     def minute(self):
-        return int(self.bitstring(72, 80), 2)
+        return int(self.bitstring(70, 76), 2)
     def second(self):
-        return int(self.bitstring(64, 72), 2)
+        return int(self.bitstring(64, 70), 2)
     def datetime(self):
         return datetime.datetime(self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second())
     def timestamp(self):
         return time.mktime(self.datetime().timetuple())
     
-file = "./recordings/test500_5.wav"
-freq = 500
-decoder = AudioDecoder(file, freq)
-decoder.decode(2000, 5000, 122)
+file = "./recordings/test500_7_loss.wav"
+freq = 660
+interval = 3
+decoder = AudioDecoder(file, freq, interval)
+decoder.decode(500, 4000, 110)
 
 print(decoder.data)
 
 dataObject = decoder.get_data_object(StandardFormat(), 0)
-#print(dataObject.lat())
-#print(dataObject.long())
+print(dataObject.lat())
+print(dataObject.long())
+print(dataObject.year())
+print(dataObject.month())
+print(dataObject.day())
+print(dataObject.hour())
 print(dataObject.minute())
+print(dataObject.second())
+print(time.ctime(dataObject.timestamp()))
