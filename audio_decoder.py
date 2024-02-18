@@ -1,27 +1,26 @@
-import pyaudio
 import wave
 import numpy as np
 import time
 import datetime
 from codecs import decode
 import struct
+import scipy
 
 class AudioDecoder:
-    def __init__(self, file, freq):
+    def __init__(self, file, freq, interval):
         self.file = file
         self.freq = freq
+        self.interval = interval
         
         # Opens audio file and gets data
         wf = wave.open(self.file, "rb")
-        self.frames = np.frombuffer(wf.readframes(-1), dtype=np.int16)
+        self.frames = np.frombuffer(wf.readframes(-1), dtype=np.int32)
         self.frame_rate = wf.getframerate()
         wf.close()
 
-    def decode(self, waveThres, bitThres, size):
+    def decode(self, bitThres, size):
         # Sets parameters
 
-        # Threshold for detecting wave peaks
-        self.waveThres = waveThres
         # Theshold for detecting high logic bits
         self.bitThres = bitThres
 
@@ -29,42 +28,23 @@ class AudioDecoder:
         self.size = size
 
         # Gets locations of wave peaks
-        self.wave_peaks = self.get_wave_peaks(waveThres)
+        self.wave_peaks = self.get_wave_peaks()
 
         # Looks for binary signal within ranges to get data
         raw = self.convert_binary(self.wave_peaks, bitThres)
 
         # Gets locations of data blocks and parses into array
-        self.second_stamps = self.locate_data(raw, size)
-        self.data = self.parse_data(raw, self.second_stamps, size)
+        self.data_stamps = self.locate_data(raw, size)
+        self.data = self.parse_data(raw, self.data_stamps, size)
 
-    def get_wave_peaks(self, waveThres):
-      """Gets indices of maximum values in ranges where signal is above threshold"""
-
-      # Gets all indices where signal is above and below theshold
-      above = np.argwhere(self.frames >= waveThres)[:, 0]
-      below = np.argwhere(self.frames < waveThres)[:, 0]
-
-      # Gets locations where there are changes from below to above and vice versa
-      to_above = above[np.argwhere(np.diff(np.concatenate(([-1], above))) > 1)[:, 0]]
-      to_below = below[np.argwhere(np.diff(below) > 1)[:, 0] + 1]
-
-      # Removes last wave peak if it does not have a distinct end
-      if above[-1] == self.frames.size-1:
-            to_above = to_above[:-1]
-
-      # Creates a mask that filters indices by ranges
-      all_indices = np.arange(self.frames.size)
-
-      mask = np.all([all_indices >= to_above.reshape(-1, 1), all_indices < to_below.reshape(-1, 1)], axis=0)
-
-      # Returns locations of maximum values within ranges
-      return np.argmax(np.where(mask, self.frames, np.array(0)), axis=-1)
-    
+    def get_wave_peaks(self):
+        """Gets indices of wave peaks"""
+        return scipy.signal.find_peaks(self.frames, distance=0.75*self.frame_rate/self.freq)[0]
+        
     def convert_binary(self, index, bitThres):
         """Converts frame amplitudes to binary signal"""
         selected = self.frames[np.array(index)]
-        data = np.zeros(selected.size)
+        data = np.zeros(selected.size, dtype = np.int8)
         data[selected < bitThres] = 0
         data[selected >= bitThres] = 1
 
@@ -79,83 +59,87 @@ class AudioDecoder:
         # Gets differences between indices
         separation = np.diff(indices)
 
-        # Gets only indices that have a separation of more than data buffer
-        indices = np.delete(indices, np.argwhere(separation < size-1) + 1)
+        # Marks all indices that have a separation of more than data buffer
+        stamps = np.delete(indices, np.argwhere(separation < size*self.interval) + 1)[1:]
 
-        # Removes last index if there is not enough room for a full data buffer
-        if indices[-1] > indices.size - size:
-            indices = np.delete(indices, -1)
+        # Gets all indices with enough room for a full data block
+        indices = indices[indices < data.size - size*self.interval]
 
-        # Removes indices that do not have an end bit at the end of the buffer
-        return np.delete(indices, np.argwhere(np.logical_not(data[indices + size-1])))
+        # Restricts to indices with an end bit at the end of the data block
+        indices = indices[data[indices + size*self.interval-1].astype(np.bool_)]
+
+        # Adds beginnings of data blocks to second stamps
+        self.second_stamps = np.sort(np.union1d(stamps, indices))
+
+        return indices
     
     def parse_data(self, data, index, size):
         """Gets array of data chunks from locations"""
         index = np.array(index)
 
-        # Expands indices array to include full data size
-        indices = index.reshape(index.size, 1) + np.arange(size).reshape(1, size)
+        # Expands indices array to include full data size (excluding repeats)
+        indices = index.reshape(-1, 1) + np.arange(0, size*self.interval, self.interval).reshape(1, -1)
         
         # Trims off start and end bits
         return data[indices][:, 1:-1].astype(np.int16)
     
+    def get_second(self, index):
+        """Finds closest second stamp to frame index"""
+        frameDiff = index - np.concatenate(([-1], self.wave_peaks[self.second_stamps]))
+
+        frameDiff[frameDiff < 0] = np.max(frameDiff) + 1
+        return np.argmin(frameDiff, axis=0) - 1
+    
     def get_micros(self, index):
         """Gets microsecond timestamp from frame index"""
-        # Adds placeholder wave peak at the beginning
-        peaks = np.concatenate(([-1], self.wave_peaks))
+        # Adds placeholder wave peak
+        peaks = np.concatenate(([-1], self.wave_peaks), axis=0)
 
         # Gets differences between index and wave peaks
         frameDiff = np.array(index) - peaks
-
-        # Finds closest wave peak to index
-        frameDiff[frameDiff < 0] = np.nan
-        peakCount = np.nanargmin(frameDiff, axis=0) - 1
-
-        # Adds placeholder second stamp at the beginning
-        stamps = np.concatenate(([self.second_stamps[0] - self.freq], self.second_stamps))
+        
+        # Finds closest wave peak before index
+        frameDiff[frameDiff < 0] = np.max(frameDiff) + 1
+        peakCount = np.argmin(frameDiff, axis=0) - 1
+        
+        # Adds placeholder second stamp
+        stamps = np.concatenate(([self.second_stamps[0]-self.freq], self.second_stamps), axis=0)
 
         # Gets differences between peak count and second stamps
         peakDiff = peakCount - stamps
 
-        # Finds difference to closest second stamp
-        peakDiff[peakDiff < 0] = np.nan
-        peaksAfter = np.nanmin(peakDiff, axis=0)
+        # Finds difference to closest second stamp before current peak
+        peakDiff[peakDiff < 0] = np.max(peakDiff) + 1
+        peaksAfter = np.min(peakDiff, axis=0)
 
         # Converts wave peaks to microseconds
-        return peaksAfter/self.freq*1000000
+        return int(peaksAfter/self.freq*1000000)
+    
     def get_data_object(self, dataFormat, index):
         """Gets closest data object to frame index"""
 
-        # Finds closest second stamp
-        frameDiff = index - self.wave_peaks[self.second_stamps]
+        # Finds closest data stamp to index
+        frameDiff = index - self.wave_peaks[self.data_stamps]
 
         frameDiff = np.abs(frameDiff)
-        secondNum = np.argmin(frameDiff, axis=0)
+        dataNum = np.argmin(frameDiff, axis=0)
 
         # Feeds data to format object
-        dataFormat.feed(self.data[secondNum])
+        dataFormat.feed(self.data[dataNum])
 
-        return dataFormat
+        return (dataNum, dataFormat)
 
     def get_timestamp(self, dataFormat, index):
         """Gets unix timestamp of frame index"""
 
-        # Finds closest second stamp
-        frameDiff = index - self.wave_peaks[self.second_stamps]
+        # Gets data number and timestamp from closest data object
+        dataNum, dataObject = self.get_data_object(dataFormat, index)
+        timestamp = dataObject.timestamp()
 
-        frameDiff = np.abs(frameDiff)
-        secondNum = np.argmin(frameDiff, axis=0)
+        # Calculates how many seconds away from timestamp index is
+        timeDiff = self.get_second(index) - self.get_second(self.wave_peaks[self.data_stamps[dataNum]])
 
-        # Feeds data to format object
-        dataFormat.feed(self.data[secondNum])
-        # Gets unix timestamp
-        timestamp = dataFormat.timestamp()
-
-        # Subtracts 1 from timestamp if index was before second stamp
-        if index < self.wave_peaks[self.second_stamps[secondNum]]:
-            timestamp -= 1
-
-        return timestamp
+        return timestamp + timeDiff
 
 class DataFormat:
     def feed(self, data):
@@ -209,22 +193,3 @@ class StandardFormat(DataFormat):
         return datetime.datetime(self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second())
     def timestamp(self):
         return time.mktime(self.datetime().timetuple())
-    
-file = "./recordings/test500_7_loss.wav"
-freq = 660
-interval = 3
-decoder = AudioDecoder(file, freq, interval)
-decoder.decode(500, 4000, 110)
-
-print(decoder.data)
-
-dataObject = decoder.get_data_object(StandardFormat(), 0)
-print(dataObject.lat())
-print(dataObject.long())
-print(dataObject.year())
-print(dataObject.month())
-print(dataObject.day())
-print(dataObject.hour())
-print(dataObject.minute())
-print(dataObject.second())
-print(time.ctime(dataObject.timestamp()))
