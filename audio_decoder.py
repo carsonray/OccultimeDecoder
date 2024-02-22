@@ -60,13 +60,13 @@ class AudioDecoder:
         separation = np.diff(indices)
 
         # Marks all indices that have a separation of more than data buffer
-        stamps = np.delete(indices, np.argwhere(separation < size*self.interval) + 1)[1:]
+        stamps = np.delete(indices, np.argwhere(separation <= (size-1)*self.interval) + 1)[1:]
 
         # Gets all indices with enough room for a full data block
-        indices = indices[indices < data.size - size*self.interval]
+        indices = indices[indices <= data.size - (size-1)*self.interval]
 
         # Restricts to indices with an end bit at the end of the data block
-        indices = indices[data[indices + size*self.interval-1].astype(np.bool_)]
+        indices = indices[data[indices + (size-1)*self.interval].astype(np.bool_)]
 
         # Adds beginnings of data blocks to second stamps
         self.second_stamps = np.sort(np.union1d(stamps, indices))
@@ -172,24 +172,10 @@ class DataFormat:
         bf = decode('%%0%dx' % (4 << 1) % int(b, 2), 'hex')[-4:]
         return struct.unpack('>f', bf)[0]
 
-class StandardFormat(DataFormat):
+class StandardDateTime(DataFormat):
     def lat(self):
         return self.bin_to_float(self.bitstring(0, 32))
     def long(self):
         return self.bin_to_float(self.bitstring(32, 64))
-    def year(self):
-        return int(self.bitstring(92, 108), 2)
-    def month(self):
-        return int(self.bitstring(88, 92), 2)
-    def day(self):
-        return int(self.bitstring(82, 88), 2)
-    def hour(self):
-        return int(self.bitstring(76, 82), 2)
-    def minute(self):
-        return int(self.bitstring(70, 76), 2)
-    def second(self):
-        return int(self.bitstring(64, 70), 2)
-    def datetime(self):
-        return datetime.datetime(self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second())
     def timestamp(self):
-        return time.mktime(self.datetime().timetuple())
+        return int(self.bitstring(64, 96), 2)

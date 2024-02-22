@@ -1,16 +1,16 @@
 import cv2
 import time
 from moviepy.editor import VideoFileClip
-from audio_decoder import StandardFormat, AudioDecoder
+from audio_decoder import StandardDateTime, AudioDecoder
 
-vf = "./videos/test500_9.mp4"
-af = "./recordings/test500_9.wav"
+vf = "./videos/test1000_3.mp4"
+af = "./recordings/test1000_3.wav"
 
-freq = 500
-interval = 2
-dataSize = 110
+freq = 1000
+interval = 4
+dataSize = 98
 bitThres = 2*10**8
-dataFormat = StandardFormat()
+dataFormat = StandardDateTime()
 
 clip = VideoFileClip(vf)
 clip.audio.write_audiofile(af)
