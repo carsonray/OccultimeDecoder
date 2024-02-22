@@ -1,11 +1,11 @@
 from audio_decoder import StandardDateTime, AudioDecoder
 import time
 
-file = "./recordings/test1000_1.wav"
-freq = 1000
-interval = 1
+file = "./recordings/test5000_1.wav"
+freq = 5000
+interval = 8
 decoder = AudioDecoder(file, freq, interval)
-decoder.decode(2*10**8, 98)
+decoder.decode(0.75*10**8, 98)
 
 print(decoder.data[0:10])
 

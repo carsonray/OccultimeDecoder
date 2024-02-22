@@ -39,7 +39,7 @@ class AudioDecoder:
 
     def get_wave_peaks(self):
         """Gets indices of wave peaks"""
-        return scipy.signal.find_peaks(self.frames, distance=0.75*self.frame_rate/self.freq)[0]
+        return scipy.signal.find_peaks(self.frames, distance=0.5*self.frame_rate/self.freq)[0]
         
     def convert_binary(self, index, bitThres):
         """Converts frame amplitudes to binary signal"""
@@ -61,6 +61,8 @@ class AudioDecoder:
 
         # Marks all indices that have a separation of more than data buffer
         stamps = np.delete(indices, np.argwhere(separation <= (size-1)*self.interval) + 1)[1:]
+
+        indices = np.delete(indices, np.argwhere(separation < self.interval) + 1)
 
         # Gets all indices with enough room for a full data block
         indices = indices[indices <= data.size - (size-1)*self.interval]
@@ -101,6 +103,10 @@ class AudioDecoder:
         # Finds closest wave peak before index
         frameDiff[frameDiff < 0] = np.max(frameDiff) + 1
         peakCount = np.argmin(frameDiff, axis=0) - 1
+
+        # Interpolates between wave peaks before and after frame
+        if peakCount < frameDiff.size-2:
+            peakCount += frameDiff[peakCount+1] / (peaks[peakCount+2]-peaks[peakCount+1])
         
         # Adds placeholder second stamp
         stamps = np.concatenate(([self.second_stamps[0]-self.freq], self.second_stamps), axis=0)

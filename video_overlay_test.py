@@ -3,13 +3,13 @@ import time
 from moviepy.editor import VideoFileClip
 from audio_decoder import StandardDateTime, AudioDecoder
 
-vf = "./videos/test1000_3.mp4"
-af = "./recordings/test1000_3.wav"
+vf = "./videos/test5000_1.mp4"
+af = "./recordings/test5000_1.wav"
 
-freq = 1000
-interval = 4
+freq = 5000
+interval = 20
 dataSize = 98
-bitThres = 2*10**8
+bitThres = 0.6*10**8
 dataFormat = StandardDateTime()
 
 clip = VideoFileClip(vf)
