@@ -2,7 +2,7 @@ import wave
 import matplotlib.pyplot as plt
 import numpy as np
 
-wf1= wave.open("./recordings/test5000_1.wav", "rb")
+wf1= wave.open("./recordings/data2000_8.wav", "rb")
 #wf2= wave.open("./recordings/test500_10.wav", "rb")
 
 frame_rate = wf1.getframerate()

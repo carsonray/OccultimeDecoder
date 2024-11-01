@@ -39,7 +39,7 @@ class AudioDecoder:
 
     def get_wave_peaks(self):
         """Gets indices of wave peaks"""
-        return scipy.signal.find_peaks(self.frames, distance=0.5*self.frame_rate/self.freq)[0]
+        return scipy.signal.find_peaks(self.frames, distance=0.75*self.frame_rate/self.freq)[0]
         
     def convert_binary(self, index, bitThres):
         """Converts frame amplitudes to binary signal"""
@@ -86,7 +86,7 @@ class AudioDecoder:
         return data[indices][:, 1:-1].astype(np.int16)
     
     def get_second(self, index):
-        """Finds closest second stamp to frame index"""
+        """Finds closest second stamp before frame index"""
         frameDiff = index - np.concatenate(([-1], self.wave_peaks[self.second_stamps]))
 
         frameDiff[frameDiff < 0] = np.max(frameDiff) + 1
@@ -146,6 +146,13 @@ class AudioDecoder:
         timeDiff = self.get_second(index) - self.get_second(self.wave_peaks[self.data_stamps[dataNum]])
 
         return timestamp + timeDiff
+    
+    def get_audio_offset(self, ppsFrames):
+        # Finds closest second stamp to frame index
+        frameDiff = ppsFrames.reshape(-1, 1) - self.wave_peaks[self.second_stamps]
+        
+        absDiff = np.abs(frameDiff)
+        return np.mean(frameDiff[np.arange(ppsFrames.size), np.argmin(absDiff, axis=-1)])
 
 class DataFormat:
     def feed(self, data):
